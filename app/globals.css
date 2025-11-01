@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  /* Default light theme */
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* Telegram theme colors (set by TelegramProvider) */
+  --tg-bg: #f7f7f7;
+  --tg-fg: #0b0f10;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Default dark theme */
+    --background: #0a0a0a;
+    --foreground: #ededed;
+
+    /* Telegram dark theme (overridden by TelegramProvider) */
+    --tg-bg: #0b0f10;
+    --tg-fg: #ffffff;
+  }
+}
+
+body {
+  /* Use Telegram colors for background/foreground */
+  background: var(--tg-bg);
+  color: var(--tg-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Optional: Smooth transitions when theme changes */
+body,
+body * {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import Script from "next/script";
-import React, { createContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useMemo, useState } from "react";
 
 type TG = {
   initData?: string;
@@ -33,12 +33,14 @@ type TelegramCtx = {
   webApp: TG | null;
   userName: string;
   colorScheme: "light" | "dark";
+  sessionReady: boolean;
 };
 
 export const TelegramContext = createContext<TelegramCtx>({
   webApp: null,
   userName: "Guest",
   colorScheme: "dark",
+  sessionReady: false,
 });
 
 export default function TelegramProvider({
@@ -49,13 +51,16 @@ export default function TelegramProvider({
   const [webApp, setWebApp] = useState<TG | null>(null);
   const [userName, setUserName] = useState("Guest");
   const [colorScheme, setColorScheme] = useState<"light" | "dark">("dark");
+  const [sessionReady, setSessionReady] = useState(false);
 
-  // Initialize after script loads
   const onScriptReady = () => {
-    // @ts-ignore
-    const tg: TG | undefined = window?.Telegram?.WebApp;
-    if (!tg) return;
-
+    // @ts-expect-error - Telegram WebApp is loaded from external script
+    const tg: TG | undefined = globalThis?.Telegram?.WebApp;
+    if (!tg) {
+      setWebApp(null);
+      setSessionReady(false);
+      return;
+    }
     try {
       tg.ready();
       tg.expand();
@@ -79,19 +84,34 @@ export default function TelegramProvider({
 
     setUserName(name);
     setWebApp(tg);
+
+    if (tg.initData) {
+      // Don't await - fire and forget
+      fetch("/api/telegram/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initDataRaw: tg.initData }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.ok) setSessionReady(true);
+        })
+        .catch(() => {
+          setSessionReady(false);
+        });
+    }
   };
 
   const value = useMemo(
-    () => ({ webApp, userName, colorScheme }),
-    [webApp, userName, colorScheme]
+    () => ({ webApp, userName, colorScheme, sessionReady }),
+    [webApp, userName, colorScheme, sessionReady]
   );
 
   return (
     <>
-      {/* Load Telegram WebApp SDK early */}
       <Script
         src="https://telegram.org/js/telegram-web-app.js"
-        strategy="beforeInteractive"
+        strategy="afterInteractive"
         onReady={onScriptReady}
       />
       <TelegramContext.Provider value={value}>

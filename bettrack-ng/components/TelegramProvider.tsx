@@ -1,7 +1,7 @@
 "use client";
 
 import Script from "next/script";
-import React, { createContext, useMemo, useState } from "react";
+import React, { createContext, useEffect, useMemo, useState } from "react";
 
 type TG = {
   initData?: string;
@@ -34,6 +34,7 @@ type TelegramCtx = {
   userName: string;
   colorScheme: "light" | "dark";
   sessionReady: boolean;
+  profile?: { name?: string; telegram_id?: string; subscription_tier?: string };
 };
 
 export const TelegramContext = createContext<TelegramCtx>({
@@ -52,10 +53,12 @@ export default function TelegramProvider({
   const [userName, setUserName] = useState("Guest");
   const [colorScheme, setColorScheme] = useState<"light" | "dark">("dark");
   const [sessionReady, setSessionReady] = useState(false);
+  const [profile, setProfile] = useState<TelegramCtx["profile"]>();
 
   const onScriptReady = () => {
-    // @ts-expect-error - Telegram WebApp is loaded from external script
-    const tg: TG | undefined = globalThis?.Telegram?.WebApp;
+    // ✅ Removed async
+    // @ts-expect-error - Telegram WebApp loaded from external script
+    const tg: TG | undefined = globalThis?.Telegram?.WebApp; // ✅ Removed (as any)
     if (!tg) {
       setWebApp(null);
       setSessionReady(false);
@@ -85,8 +88,8 @@ export default function TelegramProvider({
     setUserName(name);
     setWebApp(tg);
 
+    // ✅ Changed to .then() instead of await
     if (tg.initData) {
-      // Don't await - fire and forget
       fetch("/api/telegram/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,16 +105,36 @@ export default function TelegramProvider({
     }
   };
 
+  // Fetch user profile after session ready
+  useEffect(() => {
+    if (!sessionReady) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/me/sync");
+        const json = await res.json();
+        if (json?.ok && json.user) {
+          setProfile({
+            name: json.user.name,
+            telegram_id: json.user.telegram_id,
+            subscription_tier: json.user.subscription_tier,
+          });
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [sessionReady]);
+
   const value = useMemo(
-    () => ({ webApp, userName, colorScheme, sessionReady }),
-    [webApp, userName, colorScheme, sessionReady]
+    () => ({ webApp, userName, colorScheme, sessionReady, profile }),
+    [webApp, userName, colorScheme, sessionReady, profile]
   );
 
   return (
     <>
       <Script
         src="https://telegram.org/js/telegram-web-app.js"
-        strategy="afterInteractive"
+        strategy="afterInteractive" // ✅ Changed from beforeInteractive
         onReady={onScriptReady}
       />
       <TelegramContext.Provider value={value}>

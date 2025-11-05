@@ -3,9 +3,9 @@ import { useContext, useEffect, useState } from "react";
 import { TelegramContext } from "../components/TelegramProvider";
 
 export default function HomePage() {
-  const { webApp, userName, colorScheme, sessionReady } = useContext(TelegramContext);
-  const [simMsg, setSimMsg] = useState("");
+  const { webApp, userName, colorScheme, sessionReady, profile } = useContext(TelegramContext);
   const insideTelegram = Boolean(webApp);
+  const [simMsg, setSimMsg] = useState("");
 
   useEffect(() => {
     if (!webApp) return;
@@ -13,9 +13,9 @@ export default function HomePage() {
     webApp.MainButton.show();
     webApp.MainButton.onClick(() => {
       webApp.hapticFeedback?.impactOccurred("light");
-      alert(`Session ready: ${sessionReady ? "YES" : "NO"}`);
+      alert(`DB profile: ${profile?.name ?? "unknown"} • plan: ${profile?.subscription_tier ?? "?"}`);
     });
-  }, [webApp, sessionReady]);
+  }, [webApp, profile]);
 
   async function simulateDevLogin() {
     const res = await fetch("/api/telegram/validate", {
@@ -54,9 +54,9 @@ export default function HomePage() {
       <section className="card">
         <h2 className="mb-2 text-xl font-semibold">Status</h2>
         <ul className="list-inside list-disc text-white/80">
-          <li>Next.js + Tailwind running</li>
           <li>Telegram SDK loaded {insideTelegram ? "✅" : "❌"}</li>
-          <li>App session (cookie) set {sessionReady ? "✅" : "❌"}</li>
+          <li>Session cookie set {sessionReady ? "✅" : "❌"}</li>
+          <li>DB profile {profile?.telegram_id ? "✅" : "❌"}</li>
         </ul>
       </section>
     </main>

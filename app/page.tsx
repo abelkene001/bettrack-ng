@@ -3,7 +3,8 @@ import { useContext, useEffect, useState } from "react";
 import { TelegramContext } from "../components/TelegramProvider";
 
 export default function HomePage() {
-  const { webApp, userName, colorScheme, sessionReady, profile } = useContext(TelegramContext);
+  const { webApp, userName, colorScheme, sessionReady, profile } =
+    useContext(TelegramContext);
   const insideTelegram = Boolean(webApp);
   const [simMsg, setSimMsg] = useState("");
 
@@ -13,7 +14,11 @@ export default function HomePage() {
     webApp.MainButton.show();
     webApp.MainButton.onClick(() => {
       webApp.hapticFeedback?.impactOccurred("light");
-      alert(`DB profile: ${profile?.name ?? "unknown"} • plan: ${profile?.subscription_tier ?? "?"}`);
+      alert(
+        `DB profile: ${profile?.name ?? "unknown"} • plan: ${
+          profile?.subscription_tier ?? "?"
+        }`
+      );
     });
   }, [webApp, profile]);
 
@@ -21,17 +26,27 @@ export default function HomePage() {
     const res = await fetch("/api/telegram/validate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ devUser: { id: 999001, name: "Local Dev", username: "dev_local" } }),
+      body: JSON.stringify({
+        devUser: { id: 999001, name: "Local Dev", username: "dev_local" },
+      }),
     });
     const data = await res.json();
-    setSimMsg(data?.ok ? "✅ Simulated login OK. Refresh the page." : `❌ ${data?.error || "unknown"}`);
+    setSimMsg(
+      data?.ok
+        ? "✅ Simulated login OK. Refresh the page."
+        : `❌ ${data?.error || "unknown"}`
+    );
   }
 
   return (
     <main className="flex min-h-[80vh] flex-col gap-4">
       <header className="card">
         <h1 className="text-2xl font-bold">BetTrack NG</h1>
-        <p className="text-white/70">Telegram Mini App • Next.js • Tailwind • Supabase</p>
+        <p className="text-white/70">
+          Telegram Mini App • Next.js • Tailwind • Supabase Telegram Mini App •
+          Next.js • Tailwind • Supabase Telegram Mini App • Next.js • Tailwind •
+          Supabase
+        </p>
       </header>
 
       <section className="card">
@@ -40,13 +55,17 @@ export default function HomePage() {
       </section>
 
       <section className="card">
-        <div className="text-sm text-white/60">Welcome</div>
-        <div className="text-lg font-semibold">{insideTelegram ? userName : "Guest"}</div>
+        <div className="text-sm text-white/60">testing Welcome</div>
+        <div className="text-lg font-semibold">
+          {insideTelegram ? userName : "Guest"}
+        </div>
       </section>
 
       {!insideTelegram && (
         <section className="card">
-          <button onClick={simulateDevLogin} className="btn-primary">Simulate Telegram Login (Dev)</button>
+          <button onClick={simulateDevLogin} className="btn-primary">
+            Simulate Telegram Login (Dev)
+          </button>
           {simMsg && <p className="mt-2 text-sm text-white/80">{simMsg}</p>}
         </section>
       )}

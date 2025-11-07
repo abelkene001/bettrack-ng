@@ -5,51 +5,83 @@ import { supabaseAdmin } from "../../../../lib/supabaseAdmin";
 import { SESSION_COOKIE, verifyAppSession } from "../../../../lib/session";
 
 export async function GET() {
-  // 1) Read our app session cookie
+  // Read our app session cookie
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) {
-    return NextResponse.json({ ok: false, error: "NO_SESSION" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: "NO_SESSION" },
+      { status: 401 }
+    );
   }
 
-  // 2) Verify cookie → grab telegram id + name
+  //Decode cookie -> telegram id + name
   let sess: { sub: string; name?: string; username?: string };
   try {
     sess = await verifyAppSession(token);
   } catch {
-    return NextResponse.json({ ok: false, error: "BAD_SESSION" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: "BAD_SESSION" },
+      { status: 401 }
+    );
   }
 
-  const telegramId = String(sess.sub);
-  const name = sess.name || "User";
+  //Find user by telegram_id
+  const telegramId = Number(sess.sub);
+  if (!Number.isFinite(telegramId)) {
+    return NextResponse.json(
+      { ok: false, error: "BAD_TELEGRAM_ID" },
+      { status: 400 }
+    );
+  }
 
-  // 3) Upsert into public.users by telegram_id
-  //    NOTE: If you already created the tables, ensure users(telegram_id) is UNIQUE.
-  const { data, error } = await supabaseAdmin
-    .from("users")
-    .upsert(
-      {
-        telegram_id: telegramId,
-        name,
-      },
-      { onConflict: "telegram_id" }
-    )
+  const { data: userRow, error: userErr } = await supabaseAdmin
+    .from("user")
     .select("*")
-    .single();
+    .eq("telegram_id")
+    .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (userErr) {
+    return NextResponse.json(
+      { ok: false, error: userErr.message },
+      { status: 500 }
+    );
   }
+  if (!userRow) {
+    // if user does not exist yet, create a minmal one
+    const { data: newUser, error: insErr } = await supabaseAdmin
+      .from("users")
+      .insert({
+        telegram_id: telegramId,
+        username: sess.username ?? null,
+        first_name: sess.name ?? null,
+        role: "bettor",
+      })
+      .select("*")
+      .single();
+    if (insErr) {
+      return NextResponse.json(
+        { ok: false, error: insErr.message },
+        { status: 500 }
+      );
+    }
+    // Fetch profile (if any)
+    const { data: Profile, error: proErr } = await supabaseAdmin
+      .from("tipster_profiles")
+      .select("*")
+      .eq("user_id", userRow.id)
+      .maybeSingle();
 
-  return NextResponse.json({
-    ok: true,
-    user: {
-      id: data.id,                 // uuid from DB
-      telegram_id: data.telegram_id,
-      name: data.name,
-      subscription_tier: data.subscription_tier,
-      subscription_expires_at: data.subscription_expires_at,
-      created_at: data.created_at,
-    },
-  });
+    if (proErr) {
+      return NextResponse.json(
+        { ok: false, error: proErr.message },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json({
+      ok: true,
+      user: userRow,
+      profile: Profile ?? null,
+    });
+  }
 }

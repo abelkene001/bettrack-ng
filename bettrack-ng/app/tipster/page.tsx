@@ -116,9 +116,6 @@ export default function TipsterProfilePage() {
       <header className="rounded-2xl bg-white/5 p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">Tipster Profile</h1>
-          <Link href="/" className="text-xs underline">
-            Home
-          </Link>
         </div>
       </header>
 

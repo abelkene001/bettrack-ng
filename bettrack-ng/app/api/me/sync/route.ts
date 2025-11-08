@@ -5,7 +5,7 @@ import { supabaseAdmin } from "../../../../lib/supabaseAdmin";
 import { SESSION_COOKIE, verifyAppSession } from "../../../../lib/session";
 
 export async function GET() {
-  // Read our app session cookie
+  // 1) Read our app session cookie
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) {
@@ -15,7 +15,7 @@ export async function GET() {
     );
   }
 
-  //Decode cookie -> telegram id + name
+  // 2) Verify cookie → grab telegram id + name
   let sess: { sub: string; name?: string; username?: string };
   try {
     sess = await verifyAppSession(token);
@@ -26,7 +26,7 @@ export async function GET() {
     );
   }
 
-  //Find user by telegram_id
+  // Make sure we have a valid numeric telegram id
   const telegramId = Number(sess.sub);
   if (!Number.isFinite(telegramId)) {
     return NextResponse.json(
@@ -35,10 +35,11 @@ export async function GET() {
     );
   }
 
+  // 3) Find (or create) the user by telegram_id
   const { data: userRow, error: userErr } = await supabaseAdmin
-    .from("user")
+    .from("users") // ✅ plural
     .select("*")
-    .eq("telegram_id")
+    .eq("telegram_id", telegramId) // ✅ pass value as 2nd arg
     .maybeSingle();
 
   if (userErr) {
@@ -47,8 +48,9 @@ export async function GET() {
       { status: 500 }
     );
   }
-  if (!userRow) {
-    // if user does not exist yet, create a minmal one
+
+  let user = userRow;
+  if (!user) {
     const { data: newUser, error: insErr } = await supabaseAdmin
       .from("users")
       .insert({
@@ -65,23 +67,26 @@ export async function GET() {
         { status: 500 }
       );
     }
-    // Fetch profile (if any)
-    const { data: Profile, error: proErr } = await supabaseAdmin
-      .from("tipster_profiles")
-      .select("*")
-      .eq("user_id", userRow.id)
-      .maybeSingle();
-
-    if (proErr) {
-      return NextResponse.json(
-        { ok: false, error: proErr.message },
-        { status: 500 }
-      );
-    }
-    return NextResponse.json({
-      ok: true,
-      user: userRow,
-      profile: Profile ?? null,
-    });
+    user = newUser;
   }
+
+  // 4) Fetch tipster profile (if any)
+  const { data: profile, error: profErr } = await supabaseAdmin
+    .from("tipster_profiles")
+    .select("*")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (profErr) {
+    return NextResponse.json(
+      { ok: false, error: profErr.message },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    user,
+    profile: profile ?? null,
+  });
 }

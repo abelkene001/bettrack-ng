@@ -1,20 +1,17 @@
 // app/layout.tsx
-import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import TelegramProvider from "@/components/TelegramProvider";
+import type { Metadata, Viewport } from "next";
+import TelegramProvider from "../components/TelegramProvider";
+import BottomTabs from "../components/BottomTabs";
 
 export const metadata: Metadata = {
   title: "BetTrack NG",
-  description: "Tipster accountability & odds comparison for Nigerian bettors",
-  // ⛔️ Do not put viewport or themeColor here on Next.js 15/16
+  description: "Telegram Mini App marketplace for betting tickets",
 };
 
-// ✅ Move viewport + themeColor here
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: "#0b0f10",
 };
 
@@ -25,10 +22,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body className="min-h-screen bg-[#0b0f10] text-white pb-20">
         <TelegramProvider>
-          <div className="mx-auto max-w-md p-4">{children}</div>
+          <div className="mx-auto max-w-md px-4 pt-4 pb-4">{children}</div>
         </TelegramProvider>
+        <BottomTabs />
       </body>
     </html>
   );

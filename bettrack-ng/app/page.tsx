@@ -1,82 +1,48 @@
+// app/page.tsx
 "use client";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect } from "react";
+import Link from "next/link";
 import { TelegramContext } from "../components/TelegramProvider";
 
 export default function HomePage() {
-  const { webApp, userName, colorScheme, sessionReady, profile } =
-    useContext(TelegramContext);
-  const insideTelegram = Boolean(webApp);
-  const [simMsg, setSimMsg] = useState("");
+  const { webApp } = useContext(TelegramContext);
 
   useEffect(() => {
     if (!webApp) return;
-    webApp.MainButton.setText("Get Started");
+    webApp.MainButton.setText("Become a Tipster");
     webApp.MainButton.show();
     webApp.MainButton.onClick(() => {
       webApp.hapticFeedback?.impactOccurred("light");
-      alert(
-        `DB profile: ${profile?.name ?? "unknown"} • plan: ${
-          profile?.subscription_tier ?? "?"
-        }`
-      );
+      window.location.href = "/tipster";
     });
-  }, [webApp, profile]);
-
-  async function simulateDevLogin() {
-    const res = await fetch("/api/telegram/validate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        devUser: { id: 999001, name: "Local Dev", username: "dev_local" },
-      }),
-    });
-    const data = await res.json();
-    setSimMsg(
-      data?.ok
-        ? "✅ Simulated login OK. Refresh the page."
-        : `❌ ${data?.error || "unknown"}`
-    );
-  }
+  }, [webApp]);
 
   return (
-    <main className="flex min-h-[80vh] flex-col gap-4">
+    <main className="flex flex-col gap-4">
       <header className="card">
         <h1 className="text-2xl font-bold">BetTrack NG</h1>
-        <p className="text-white/70">
-          Telegram Mini App • Next.js • Tailwind • Supabase Telegram Mini App •
-          Next.js • Tailwind • Supabase Telegram Mini App • Next.js • Tailwind •
-          Supabase
+        <p className="text-white/70 text-sm">
+          Buy & sell premium betting tickets inside Telegram.
         </p>
       </header>
 
       <section className="card">
-        <div className="text-sm text-white/60">Theme</div>
-        <div className="text-lg font-semibold capitalize">{colorScheme}</div>
-      </section>
-
-      <section className="card">
-        <div className="text-sm text-white/60">testing Welcome</div>
-        <div className="text-lg font-semibold">
-          {insideTelegram ? userName : "Guest"}
+        <h2 className="mb-2 text-xl font-semibold">Quick Actions</h2>
+        <div className="grid grid-cols-1 gap-3">
+          <Link href="/tipster" className="btn-primary text-center">
+            🎯 Create / Edit Tipster Profile
+          </Link>
+          <Link href="/browse" className="btn-secondary text-center">
+            🔎 Browse Tipsters
+          </Link>
+          <Link href="/tickets" className="btn-secondary text-center">
+            🎫 My Tickets
+          </Link>
         </div>
-      </section>
-
-      {!insideTelegram && (
-        <section className="card">
-          <button onClick={simulateDevLogin} className="btn-primary">
-            Simulate Telegram Login (Dev)
-          </button>
-          {simMsg && <p className="mt-2 text-sm text-white/80">{simMsg}</p>}
-        </section>
-      )}
-
-      <section className="card">
-        <h2 className="mb-2 text-xl font-semibold">Status</h2>
-        <ul className="list-inside list-disc text-white/80">
-          <li>Telegram SDK loaded {insideTelegram ? "✅" : "❌"}</li>
-          <li>Session cookie set {sessionReady ? "✅" : "❌"}</li>
-          <li>DB profile {profile?.telegram_id ? "✅" : "❌"}</li>
-        </ul>
+        <p className="mt-3 text-xs text-white/60">
+          Tip: In Telegram, tap the blue main button at the bottom to jump to
+          Tipster Profile.
+        </p>
       </section>
     </main>
   );

@@ -18,18 +18,13 @@ type Profile = {
   created_at: string;
 } | null;
 
-type MeResponse = {
-  ok: boolean;
-  user?: {
-    // ✅ Fixed
-    id: string;
-    telegram_id: string;
-    name?: string;
-    subscription_tier?: string;
-  };
-  profile?: Profile;
-  error?: string;
-};
+type MeResponse =
+  | {
+      ok: true;
+      user: { id: string; telegram_id: string; name?: string };
+      profile: Profile;
+    }
+  | { ok: false; error: string };
 
 export default function TipsterProfilePage() {
   const [loading, setLoading] = useState(true);
@@ -47,8 +42,31 @@ export default function TipsterProfilePage() {
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetch("/api/profile/me");
-        const json: MeResponse = await res.json();
+        const res = await fetch("/api/profile/me", { cache: "no-store" });
+
+        // If opened outside Telegram (no session), API returns 401 → show hint, don't parse JSON
+        if (res.status === 401) {
+          setErr(
+            "Open this page from your Telegram bot (tap 'Open') so we can verify you."
+          );
+          setLoading(false);
+          return;
+        }
+
+        const ctype = res.headers.get("content-type") || "";
+        if (!ctype.includes("application/json")) {
+          const txt = await res.text();
+          setErr(
+            `Server returned non-JSON (status ${res.status}).\n${txt.slice(
+              0,
+              200
+            )}`
+          );
+          setLoading(false);
+          return;
+        }
+
+        const json = (await res.json()) as MeResponse;
         if (!json.ok) {
           setErr(json.error || "Failed to load profile");
         } else {
@@ -58,7 +76,6 @@ export default function TipsterProfilePage() {
           setPhotoUrl(json.profile?.profile_photo_url ?? "");
         }
       } catch (e) {
-        // ✅ Fixed - removed : any
         setErr(e instanceof Error ? e.message : "Failed to load");
       } finally {
         setLoading(false);
@@ -79,6 +96,26 @@ export default function TipsterProfilePage() {
           profile_photo_url: photoUrl || null,
         }),
       });
+
+      if (res.status === 401) {
+        setErr("Please open from your Telegram bot so we can verify you.");
+        setSaving(false);
+        return;
+      }
+
+      const ctype = res.headers.get("content-type") || "";
+      if (!ctype.includes("application/json")) {
+        const txt = await res.text();
+        setErr(
+          `Server returned non-JSON (status ${res.status}).\n${txt.slice(
+            0,
+            200
+          )}`
+        );
+        setSaving(false);
+        return;
+      }
+
       const json = await res.json();
       if (!json.ok) {
         setErr(json.error || "Save failed");
@@ -87,7 +124,6 @@ export default function TipsterProfilePage() {
         alert(json.created ? "Profile created ✅" : "Profile updated ✅");
       }
     } catch (e) {
-      // ✅ Fixed - removed : any
       setErr(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
@@ -95,7 +131,7 @@ export default function TipsterProfilePage() {
   }
 
   return (
-    <main className="mx-auto max-w-md p-4">
+    <main className="pb-4">
       <header className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Tipster Profile</h1>
         <Link href="/" className="text-sm underline">
@@ -107,7 +143,11 @@ export default function TipsterProfilePage() {
         <div className="card">Loading…</div>
       ) : (
         <>
-          {err && <div className="card text-red-300">Error: {err}</div>}
+          {err && (
+            <div className="card text-red-300 whitespace-pre-wrap">
+              Error: {err}
+            </div>
+          )}
 
           <section className="card">
             <label className="mb-2 block text-sm text-white/70">
@@ -139,16 +179,8 @@ export default function TipsterProfilePage() {
               placeholder="https://…"
             />
 
-            <button
-              onClick={saveProfile}
-              disabled={saving}
-              className="btn-primary"
-            >
-              {saving
-                ? "Saving…"
-                : profile
-                ? "Update Profile"
-                : "Create Profile"}
+            <button onClick={saveProfile} className="btn-primary">
+              {profile ? "Update Profile" : "Create Profile"}
             </button>
           </section>
 

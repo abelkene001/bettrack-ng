@@ -1,4 +1,3 @@
-// app/tipster/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -19,11 +18,7 @@ type Profile = {
 } | null;
 
 type MeResponse =
-  | {
-      ok: true;
-      user: { id: string; telegram_id: string; name?: string };
-      profile: Profile;
-    }
+  | { ok: true; user: { id: string; telegram_id: string }; profile: Profile }
   | { ok: false; error: string };
 
 export default function TipsterProfilePage() {
@@ -32,7 +27,6 @@ export default function TipsterProfilePage() {
   const [err, setErr] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>(null);
 
-  // form fields
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
@@ -44,11 +38,8 @@ export default function TipsterProfilePage() {
       try {
         const res = await fetch("/api/profile/me", { cache: "no-store" });
 
-        // If opened outside Telegram (no session), API returns 401 → show hint, don't parse JSON
         if (res.status === 401) {
-          setErr(
-            "Open this page from your Telegram bot (tap 'Open') so we can verify you."
-          );
+          setErr("Open this page from your Telegram bot so we can verify you.");
           setLoading(false);
           return;
         }
@@ -56,12 +47,7 @@ export default function TipsterProfilePage() {
         const ctype = res.headers.get("content-type") || "";
         if (!ctype.includes("application/json")) {
           const txt = await res.text();
-          setErr(
-            `Server returned non-JSON (status ${res.status}).\n${txt.slice(
-              0,
-              200
-            )}`
-          );
+          setErr(`Server returned non-JSON (status ${res.status}).`);
           setLoading(false);
           return;
         }
@@ -106,12 +92,7 @@ export default function TipsterProfilePage() {
       const ctype = res.headers.get("content-type") || "";
       if (!ctype.includes("application/json")) {
         const txt = await res.text();
-        setErr(
-          `Server returned non-JSON (status ${res.status}).\n${txt.slice(
-            0,
-            200
-          )}`
-        );
+        setErr(`Server returned non-JSON (status ${res.status}).`);
         setSaving(false);
         return;
       }
@@ -131,62 +112,78 @@ export default function TipsterProfilePage() {
   }
 
   return (
-    <main className="pb-4">
-      <header className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Tipster Profile</h1>
-        <Link href="/" className="text-sm underline">
-          Home
-        </Link>
+    <main className="flex flex-col gap-4">
+      <header className="rounded-2xl bg-white/5 p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold">Tipster Profile</h1>
+          <Link href="/" className="text-xs underline">
+            Home
+          </Link>
+        </div>
       </header>
 
       {loading ? (
-        <div className="card">Loading…</div>
+        <div className="rounded-2xl bg-white/5 p-4">Loading…</div>
       ) : (
         <>
           {err && (
-            <div className="card text-red-300 whitespace-pre-wrap">
-              Error: {err}
+            <div className="rounded-2xl bg-red-500/20 p-4 text-sm text-red-200">
+              {err}
             </div>
           )}
 
-          <section className="card">
-            <label className="mb-2 block text-sm text-white/70">
-              Display Name
-            </label>
-            <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              className="mb-3 w-full rounded-lg bg-white/10 p-3 outline-none"
-              placeholder="e.g. Lagos Sure Odds"
-            />
+          <section className="rounded-2xl bg-white/5 p-4 shadow-sm">
+            <div className="mb-3">
+              <label className="mb-1 block text-xs text-white/60">
+                Display Name
+              </label>
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="w-full rounded-xl bg-white/10 p-3 text-sm outline-none"
+                placeholder="e.g. Lagos Sure Odds"
+              />
+            </div>
 
-            <label className="mb-2 block text-sm text-white/70">Bio</label>
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              className="mb-3 w-full rounded-lg bg-white/10 p-3 outline-none"
-              placeholder="Tell bettors about your style, leagues, average odds, etc."
-              rows={4}
-            />
+            <div className="mb-3">
+              <label className="mb-1 block text-xs text-white/60">Bio</label>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                className="w-full rounded-xl bg-white/10 p-3 text-sm outline-none"
+                placeholder="Your style, leagues, typical odds, etc."
+                rows={4}
+              />
+            </div>
 
-            <label className="mb-2 block text-sm text-white/70">
-              Profile Photo URL (optional)
-            </label>
-            <input
-              value={photoUrl}
-              onChange={(e) => setPhotoUrl(e.target.value)}
-              className="mb-4 w-full rounded-lg bg-white/10 p-3 outline-none"
-              placeholder="https://…"
-            />
+            <div className="mb-4">
+              <label className="mb-1 block text-xs text-white/60">
+                Profile Photo URL (optional)
+              </label>
+              <input
+                value={photoUrl}
+                onChange={(e) => setPhotoUrl(e.target.value)}
+                className="w-full rounded-xl bg-white/10 p-3 text-sm outline-none"
+                placeholder="https://…"
+              />
+            </div>
 
-            <button onClick={saveProfile} className="btn-primary">
-              {profile ? "Update Profile" : "Create Profile"}
+            <button
+              onClick={saveProfile}
+              disabled={saving}
+              className="w-full rounded-xl bg-white text-[#0b0f10] py-3 text-sm font-semibold"
+            >
+              {saving
+                ? "Saving…"
+                : profile
+                ? "Update Profile"
+                : "Create Profile"}
             </button>
           </section>
 
           {profile && (
-            <section className="card">
-              <h2 className="mb-2 text-xl font-semibold">Public Preview</h2>
+            <section className="rounded-2xl bg-white/5 p-4 shadow-sm">
+              <h2 className="mb-3 text-base font-semibold">Public Preview</h2>
               <div className="flex items-center gap-3">
                 {profile.profile_photo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element

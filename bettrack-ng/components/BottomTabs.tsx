@@ -10,6 +10,7 @@ const tabs = [
   // We’ll add these real pages later:
   { href: "/browse", label: "Browse", emoji: "🔎" },
   { href: "/tickets", label: "Tickets", emoji: "🎫" },
+  { href: "/profile", label: "Profile", emoji: "👤" },
 ];
 
 export default function BottomTabs() {

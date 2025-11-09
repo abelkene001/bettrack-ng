@@ -44,7 +44,13 @@ function isMatchRowArray(val: unknown): val is MatchRow[] {
   });
 }
 
-export default function TicketCard({ t }: { t: Ticket }) {
+export default function TicketCard({
+  t,
+  onClick,
+}: {
+  t: Ticket;
+  onClick?: () => void;
+}) {
   const details: MatchRow[] | null = isMatchRowArray(t.match_details)
     ? (t.match_details as MatchRow[]).map((m) => ({
         home: m.home,
@@ -54,92 +60,95 @@ export default function TicketCard({ t }: { t: Ticket }) {
       }))
     : null;
 
+  const Wrapper: React.ElementType = onClick ? "button" : "div";
+  const wrapperProps = onClick
+    ? { onClick, className: "w-full text-left" }
+    : { className: "w-full" };
+
   return (
-    <article className="rounded-2xl bg-white/5 p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-3">
-        {t.tipster?.profile_photo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={t.tipster.profile_photo_url}
-            alt="Tipster"
-            className="h-9 w-9 rounded-full object-cover"
-          />
-        ) : (
-          <div className="h-9 w-9 rounded-full bg-white/10" />
+    <Wrapper {...wrapperProps}>
+      <article className="rounded-2xl bg-white/5 p-4 shadow-sm">
+        <div className="mb-3 flex items-center gap-3">
+          {t.tipster?.profile_photo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={t.tipster.profile_photo_url}
+              alt="Tipster"
+              className="h-9 w-9 rounded-full object-cover"
+            />
+          ) : (
+            <div className="h-9 w-9 rounded-full bg-white/10" />
+          )}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold">
+              {t.tipster?.display_name || "Tipster"}
+              {t.tipster?.is_verified && (
+                <span className="ml-2 rounded bg-white/10 px-2 py-0.5 text-[10px]">
+                  Verified
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-white/60">
+              {new Date(t.posted_at).toLocaleString()}
+            </div>
+          </div>
+          <div className="ml-auto text-[11px]">
+            <span className="rounded bg-white/10 px-2 py-0.5">
+              {t.type === "free" ? "FREE" : "PREMIUM"}
+            </span>
+          </div>
+        </div>
+
+        <h3 className="mb-1 text-base font-semibold">{t.title}</h3>
+        {t.description && (
+          <p className="mb-3 text-sm text-white/80">{t.description}</p>
         )}
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold">
-            {t.tipster?.display_name || "Tipster"}
-            {t.tipster?.is_verified && (
-              <span className="ml-2 rounded bg-white/10 px-2 py-0.5 text-[10px]">
-                Verified
-              </span>
-            )}
-          </div>
-          <div className="text-[11px] text-white/60">
-            {new Date(t.posted_at).toLocaleString()}
-          </div>
-        </div>
-        <div className="ml-auto text-[11px]">
-          <span className="rounded bg-white/10 px-2 py-0.5">
-            {t.type === "free" ? "FREE" : "PREMIUM"}
-          </span>
-        </div>
-      </div>
 
-      <h3 className="mb-1 text-base font-semibold">{t.title}</h3>
-      {t.description && (
-        <p className="mb-3 text-sm text-white/80">{t.description}</p>
-      )}
-
-      <div className="mb-3 grid grid-cols-3 gap-2 text-center text-[12px]">
-        <div className="rounded-xl bg-white/10 p-2">
-          <div className="text-white/60">Bookmaker</div>
-          <div className="font-semibold">{t.bookmaker || "-"}</div>
-        </div>
-        <div className="rounded-xl bg-white/10 p-2">
-          <div className="text-white/60">Total Odds</div>
-          <div className="font-semibold">{t.total_odds ?? "-"}</div>
-        </div>
-        <div className="rounded-xl bg-white/10 p-2">
-          <div className="text-white/60">Confidence</div>
-          <div className="font-semibold">
-            {t.confidence_level ?? "-"}
-            {t.confidence_level !== null ? "/10" : ""}
+        <div className="mb-3 grid grid-cols-3 gap-2 text-center text-[12px]">
+          <div className="rounded-xl bg-white/10 p-2">
+            <div className="text-white/60">Bookmaker</div>
+            <div className="font-semibold">{t.bookmaker || "-"}</div>
           </div>
-        </div>
-      </div>
-
-      {/* FREE tickets show full details */}
-      {t.type === "free" && (
-        <>
-          {details && details.length > 0 && (
-            <div className="mb-3 rounded-xl bg-white/5 p-3">
-              <div className="mb-2 text-sm font-semibold">Matches</div>
-              <ul className="list-inside list-disc text-sm text-white/80">
-                {details.map((m, i) => (
-                  <li key={i}>
-                    {m.home} vs {m.away} — pick: {m.pick} — odds: {m.odds}
-                  </li>
-                ))}
-              </ul>
+          <div className="rounded-xl bg-white/10 p-2">
+            <div className="text-white/60">Total Odds</div>
+            <div className="font-semibold">{t.total_odds ?? "-"}</div>
+          </div>
+          <div className="rounded-xl bg-white/10 p-2">
+            <div className="text-white/60">Confidence</div>
+            <div className="font-semibold">
+              {t.confidence_level ?? "-"}
+              {t.confidence_level !== null ? "/10" : ""}
             </div>
-          )}
+          </div>
+        </div>
 
-          {t.booking_code && (
-            <div className="rounded-xl bg-white/10 p-3 text-center text-sm">
-              <div className="text-white/60">Booking Code</div>
-              <div className="text-lg font-semibold tracking-wide">
-                {t.booking_code}
-              </div>
+        {/* FREE tickets show full details */}
+        {t.type === "free" && details && details.length > 0 && (
+          <div className="mb-3 rounded-xl bg-white/5 p-3">
+            <div className="mb-2 text-sm font-semibold">Matches</div>
+            <ul className="list-inside list-disc text-sm text-white/80">
+              {details.map((m, i) => (
+                <li key={i}>
+                  {m.home} vs {m.away} — pick: {m.pick} — odds: {m.odds}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {t.type === "free" && t.booking_code && (
+          <div className="rounded-xl bg-white/10 p-3 text-center text-sm">
+            <div className="text-white/60">Booking Code</div>
+            <div className="text-lg font-semibold tracking-wide">
+              {t.booking_code}
             </div>
-          )}
-        </>
-      )}
+          </div>
+        )}
 
-      <div className="mt-3 text-right text-[12px] text-white/60">
-        Status: {t.status}
-      </div>
-    </article>
+        <div className="mt-3 text-right text-[12px] text-white/60">
+          Status: {t.status}
+        </div>
+      </article>
+    </Wrapper>
   );
 }

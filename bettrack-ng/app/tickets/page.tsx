@@ -2,10 +2,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import TopTabs from "../../components/TopTabs";
 import TicketCard from "../../components/TicketCard";
+import { useRouter } from "next/navigation";
 
+type Role = "tipster" | "bettor" | "both";
+type Status = "all" | "pending" | "won" | "lost";
+type Range = "7" | "30" | "all";
 type Bookmaker = "bet9ja" | "sportybet" | "1xbet" | "betking" | "other";
+
 type TicketRow = {
   id: string;
   type: "free" | "premium";
@@ -25,18 +30,53 @@ type TicketRow = {
   } | null;
 };
 
-export default function TicketsPage() {
+export default function TicketsDashboard() {
+  const [role, setRole] = useState<Role>("bettor");
+  const [mode, setMode] = useState<"bettor" | "tipster">("bettor"); // which list we show
+  const [status, setStatus] = useState<Status>("all");
+  const [range, setRange] = useState<Range>("7");
+
   const [items, setItems] = useState<TicketRow[]>([]);
-  const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
   const router = useRouter();
 
+  // Load role on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/profile/me", { cache: "no-store" });
+        const ctype = res.headers.get("content-type") || "";
+        if (ctype.includes("application/json")) {
+          const json = (await res.json()) as
+            | { ok: true; user: { role?: Role } }
+            | { ok: false; error: string };
+          if ("ok" in json && json.ok && json.user?.role) {
+            setRole(json.user.role);
+            if (json.user.role === "tipster" || json.user.role === "both") {
+              setMode("bettor"); // default still bettor view; user can switch
+            }
+          }
+        }
+      } catch {
+        // keep default "bettor"
+      }
+    })();
+  }, []);
+
+  // Load list based on filters
   useEffect(() => {
     (async () => {
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetch("/api/tickets/recent?limit=20", {
+        const params = new URLSearchParams();
+        params.set("mode", mode);
+        params.set("status", status);
+        params.set("range", range);
+
+        const res = await fetch(`/api/tickets/mine?${params.toString()}`, {
           cache: "no-store",
         });
         if (!res.ok) {
@@ -57,26 +97,21 @@ export default function TicketsPage() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [mode, status, range]);
+
+  const canSwitch = role === "tipster" || role === "both";
 
   return (
-    <main className="flex flex-col gap-4">
-      <header className="rounded-2xl bg-white/5 p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold">Recent Tickets</h1>
-            <p className="text-xs text-white/60">
-              FREE tickets show full details.
-            </p>
-          </div>
-          <button
-            onClick={() => router.push("/tipster/new")}
-            className="rounded-lg bg-white/10 px-3 py-2 text-xs"
-          >
-            ➕ Post
-          </button>
-        </div>
-      </header>
+    <main className="flex flex-col gap-4 p-4 pb-20">
+      <TopTabs
+        status={status}
+        onStatusChange={setStatus}
+        range={range}
+        onRangeChange={setRange}
+        showTipsterSwitch={canSwitch}
+        mode={mode}
+        onModeToggle={canSwitch ? setMode : undefined}
+      />
 
       {loading && <div className="rounded-2xl bg-white/5 p-4">Loading…</div>}
       {err && (
@@ -87,16 +122,19 @@ export default function TicketsPage() {
 
       <section className="space-y-3">
         {items.map((t) => (
-          <TicketCard key={t.id} t={t} />
+          <TicketCard
+            key={t.id}
+            t={t}
+            onClick={() => router.push(`/t/${t.id}`)}
+          />
         ))}
+
         {!loading && items.length === 0 && (
           <div className="rounded-2xl bg-white/5 p-4 text-sm text-white/70">
-            No tickets yet. Be the first to post a FREE ticket.
+            Nothing here yet for this filter.
           </div>
         )}
       </section>
-
-      <div className="pb-20" />
     </main>
   );
 }

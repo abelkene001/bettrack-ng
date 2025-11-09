@@ -2,15 +2,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import TicketCard from "../../components/TicketCard";
 
+type Bookmaker = "bet9ja" | "sportybet" | "1xbet" | "betking" | "other";
 type TicketRow = {
   id: string;
   type: "free" | "premium";
   title: string;
   description: string | null;
   total_odds: number | null;
-  bookmaker: "bet9ja" | "sportybet" | "1xbet" | "betking" | "other" | null;
+  bookmaker: Bookmaker | null;
   confidence_level: number | null;
   match_details: unknown;
   booking_code: string | null;
@@ -27,6 +29,7 @@ export default function TicketsPage() {
   const [items, setItems] = useState<TicketRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     (async () => {
@@ -46,11 +49,8 @@ export default function TicketsPage() {
           items?: TicketRow[];
           error?: string;
         };
-        if (!json.ok || !json.items) {
-          setErr(json.error || "Failed to load");
-        } else {
-          setItems(json.items);
-        }
+        if (!json.ok || !json.items) setErr(json.error || "Failed to load");
+        else setItems(json.items);
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Load failed");
       } finally {
@@ -62,8 +62,20 @@ export default function TicketsPage() {
   return (
     <main className="flex flex-col gap-4">
       <header className="rounded-2xl bg-white/5 p-4 shadow-sm">
-        <h1 className="text-lg font-semibold">Recent Tickets</h1>
-        <p className="text-xs text-white/60">FREE tickets show full details.</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold">Recent Tickets</h1>
+            <p className="text-xs text-white/60">
+              FREE tickets show full details.
+            </p>
+          </div>
+          <button
+            onClick={() => router.push("/tipster/new")}
+            className="rounded-lg bg-white/10 px-3 py-2 text-xs"
+          >
+            ➕ Post
+          </button>
+        </div>
       </header>
 
       {loading && <div className="rounded-2xl bg-white/5 p-4">Loading…</div>}
@@ -79,7 +91,7 @@ export default function TicketsPage() {
         ))}
         {!loading && items.length === 0 && (
           <div className="rounded-2xl bg-white/5 p-4 text-sm text-white/70">
-            No tickets yet.
+            No tickets yet. Be the first to post a FREE ticket.
           </div>
         )}
       </section>

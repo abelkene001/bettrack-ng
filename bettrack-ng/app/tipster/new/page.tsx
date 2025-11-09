@@ -37,7 +37,6 @@ export default function NewTicketPage() {
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // form fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [bookmaker, setBookmaker] = useState<Bookmaker>("bet9ja");
@@ -51,7 +50,6 @@ export default function NewTicketPage() {
   function addMatch() {
     setMatches((m) => [...m, { home: "", away: "", pick: "", odds: 1.0 }]);
   }
-
   function updateMatch<K extends keyof MatchRow>(
     i: number,
     key: K,
@@ -61,17 +59,14 @@ export default function NewTicketPage() {
       const copy = [...m];
       const row = { ...copy[i] };
       if (key === "odds") {
-        // ensure number
         row.odds = typeof value === "number" ? value : Number(value);
-      } else if (key === "home" || key === "away" || key === "pick") {
-        // ensure string
+      } else {
         row[key] = String(value) as MatchRow[K];
       }
       copy[i] = row;
       return copy;
     });
   }
-
   function removeMatch(i: number) {
     setMatches((m) => m.filter((_, idx) => idx !== i));
   }
@@ -122,7 +117,7 @@ export default function NewTicketPage() {
         alert("Ticket posted ✅");
         window.location.href = "/tickets";
       }
-    } catch (e: unknown) {
+    } catch (e) {
       setErr(getErrorMessage(e));
     } finally {
       setSaving(false);
@@ -134,10 +129,18 @@ export default function NewTicketPage() {
       <header className="rounded-2xl bg-white/5 p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">Post FREE Ticket</h1>
-          <Link href="/tickets" className="text-xs underline">
-            Feed
-          </Link>
+          <div className="flex gap-3">
+            <Link href="/tipster" className="text-xs underline">
+              Tipster
+            </Link>
+            <Link href="/tickets" className="text-xs underline">
+              Feed
+            </Link>
+          </div>
         </div>
+        <p className="mt-2 text-xs text-white/60">
+          Free tickets show full match details & booking code to everyone.
+        </p>
       </header>
 
       {err && (
@@ -229,15 +232,6 @@ export default function NewTicketPage() {
 
         <div className="mb-2 text-sm font-semibold">Matches</div>
 
-        <div className="mb-3 space-y-3">
-          {matches.map((m, i) => (
-            <div key={i} className="rounded-xl bg白/10 p-3">
-              {/* fallback class guard */}
-            </div>
-          ))}
-        </div>
-
-        {/* Real match editors */}
         <div className="mb-3 space-y-3">
           {matches.map((m, i) => (
             <div key={`match-${i}`} className="rounded-xl bg-white/10 p-3">

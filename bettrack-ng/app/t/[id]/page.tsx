@@ -75,7 +75,7 @@ export default function TicketDetailsPage() {
             ← Back
           </button>
           <div className="text-sm font-semibold">Ticket</div>
-          <div className="w-[64px]" />
+          <div className="w-16" />
         </div>
       </header>
 

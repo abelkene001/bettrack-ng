@@ -14,8 +14,11 @@ function bad(msg: string, code = 400) {
 type Bookmaker = "bet9ja" | "sportybet" | "1xbet" | "betking" | "other";
 type Status = "pending" | "won" | "lost";
 
-export async function GET(_req: Request, ctx: { params: { id: string } }) {
-  const id = ctx.params.id;
+export async function GET(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
+  const id = String(params.id ?? "");
 
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
@@ -38,6 +41,8 @@ export async function GET(_req: Request, ctx: { params: { id: string } }) {
       // ignore session errors; treat as public
     }
   }
+
+  // ... keep the rest of your existing logic unchanged ...
 
   // fetch ticket
   const { data: rows, error } = await supabaseAdmin

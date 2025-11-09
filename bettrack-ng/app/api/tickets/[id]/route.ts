@@ -14,11 +14,11 @@ function bad(msg: string, code = 400) {
 type Bookmaker = "bet9ja" | "sportybet" | "1xbet" | "betking" | "other";
 type Status = "pending" | "won" | "lost";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  const id = String(params.id ?? "");
+export async function GET(req: Request) {
+  // get id from the URL path: /api/tickets/[id]
+  const url = new URL(req.url);
+  const segments = url.pathname.split("/");
+  const id = segments[segments.length - 1] || "";
 
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;

@@ -7,11 +7,12 @@ import { cookies } from "next/headers";
 import { supabaseAdmin } from "../../../../lib/supabaseAdmin";
 import { SESSION_COOKIE, verifyAppSession } from "../../../../lib/session";
 
+type Bookmaker = "bet9ja" | "sportybet" | "1xbet" | "betking" | "other";
 type Payload = {
   type: "free";
   title: string;
   description: string | null;
-  bookmaker: "bet9ja" | "sportybet" | "1xbet" | "betking" | "other";
+  bookmaker: Bookmaker;
   total_odds: number | null;
   confidence_level: number | null; // 1..10
   match_details: unknown;
@@ -48,17 +49,13 @@ export async function POST(req: Request) {
   if (body.type !== "free") return bad("ONLY_FREE_ALLOWED_FOR_NOW");
   const title = (body.title || "").trim();
   if (!title || title.length < 3) return bad("TITLE_TOO_SHORT");
-  if (
-    !["bet9ja", "sportybet", "1xbet", "betking", "other"].includes(
-      body.bookmaker
-    )
-  )
-    return bad("BAD_BOOKMAKER");
+
+  const validBookmakers: Bookmaker[] = ["bet9ja", "sportybet", "1xbet", "betking", "other"];
+  if (!validBookmakers.includes(body.bookmaker)) return bad("BAD_BOOKMAKER");
+
   const total_odds = body.total_odds !== null ? Number(body.total_odds) : null;
-  const confidence =
-    body.confidence_level !== null ? Number(body.confidence_level) : null;
-  if (confidence !== null && (confidence < 1 || confidence > 10))
-    return bad("BAD_CONFIDENCE");
+  const confidence = body.confidence_level !== null ? Number(body.confidence_level) : null;
+  if (confidence !== null && (confidence < 1 || confidence > 10)) return bad("BAD_CONFIDENCE");
 
   // find user + profile
   const { data: userRow, error: uErr } = await supabaseAdmin
@@ -100,8 +97,7 @@ export async function POST(req: Request) {
 
   if (cErr) return bad(cErr.message, 500);
 
-  // increment tipster counter (not critical if it fails)
-  await supabaseAdmin.rpc("noop").catch(() => {}); // placeholder if you add RPC later
+  // increment tipster counter (best-effort; ignore if it fails)
   await supabaseAdmin
     .from("tipster_profiles")
     .update({ total_tickets_posted: (prof.total_tickets_posted || 0) + 1 })

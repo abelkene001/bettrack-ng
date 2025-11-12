@@ -1,89 +1,25 @@
 // app/page.tsx
 "use client";
 
-import { useContext, useEffect, useState } from "react";
-import TicketCard from "../components/TicketCard";
-import HeaderBar from "../components/HeaderBar";
-import SidebarDrawer from "../components/SidebarDrawer";
-import { TelegramContext } from "../components/TelegramProvider";
-
-type Role = "tipster" | "bettor" | "both";
-type Bookmaker = "bet9ja" | "sportybet" | "1xbet" | "betking" | "other";
-
-type TicketRow = {
-  id: string;
-  type: "free" | "premium";
-  title: string;
-  description: string | null;
-  total_odds: number | null;
-  bookmaker: Bookmaker | null;
-  confidence_level: number | null;
-  match_details: unknown;
-  booking_code: string | null;
-  status: "pending" | "won" | "lost";
-  posted_at: string;
-  tipster: {
-    display_name: string;
-    profile_photo_url: string | null;
-    is_verified: boolean;
-  } | null;
-};
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import TicketCard, { TicketCardModel } from "../components/TicketCard";
 
 export default function HomePage() {
-  const { userName } = useContext(TelegramContext);
-
-  const [open, setOpen] = useState(false);
-  const [feed, setFeed] = useState<TicketRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const [items, setItems] = useState<TicketCardModel[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // compute tipster status locally (instead of using context.role)
-  const [role, setRole] = useState<Role>("bettor");
-  const isTipster = role === "tipster" || role === "both";
-
-  // 1) Load role from server
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/profile/me", { cache: "no-store" });
-        const ctype = res.headers.get("content-type") || "";
-        if (ctype.includes("application/json")) {
-          const json = (await res.json()) as
-            | { ok: true; user: { role?: Role }; profile?: unknown }
-            | { ok: false; error: string };
-          if ("ok" in json && json.ok && json.user?.role) {
-            setRole(json.user.role);
-          } else {
-            // default stays "bettor" if not available
-          }
-        }
-      } catch {
-        // ignore; keep default "bettor"
-      }
-    })();
-  }, []);
-
-  // 2) Load public feed
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setErr(null);
-      try {
-        const res = await fetch("/api/tickets/recent?limit=30", {
-          cache: "no-store",
-        });
-        if (!res.ok) {
-          setErr(`Failed to load (${res.status})`);
-          setLoading(false);
-          return;
-        }
-        const json = (await res.json()) as {
-          ok: boolean;
-          items?: TicketRow[];
-          error?: string;
-        };
-        if (!json.ok || !json.items) setErr(json.error || "Failed to load");
-        else setFeed(json.items);
+        setLoading(true);
+        setErr(null);
+        const res = await fetch("/api/tickets/recent", { cache: "no-store" });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error || "failed");
+        setItems(json.items as TicketCardModel[]);
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Load failed");
       } finally {
@@ -92,40 +28,40 @@ export default function HomePage() {
     })();
   }, []);
 
+  if (loading) {
+    return (
+      <main className="p-4 pb-20">
+        <div className="animate-pulse space-y-3">
+          <div className="h-12 rounded-2xl bg-white/10" />
+          <div className="h-24 rounded-2xl bg-white/10" />
+          <div className="h-24 rounded-2xl bg-white/10" />
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="flex flex-col pb-20">
-      <HeaderBar
-        titleLeft={userName || "Guest"}
-        onOpenMenu={() => setOpen(true)}
-        onBellClick={() => {
-          /* notifications later */
-        }}
-      />
+    <main className="flex flex-col gap-3 p-4 pb-20">
+      {err && (
+        <div className="rounded-2xl bg-red-500/20 p-3 text-sm text-red-200">
+          {err}
+        </div>
+      )}
 
-      <SidebarDrawer
-        open={open}
-        onClose={() => setOpen(false)}
-        isTipster={isTipster}
-      />
+      {items.map((t) => (
+        <TicketCard
+          key={t.id}
+          t={t}
+          onOpenTicket={(id) => router.push(`/t/${id}`)}
+          onOpenTipster={(uid) => router.push(`/u/${uid}`)}
+        />
+      ))}
 
-      <div className="p-4 space-y-3">
-        {loading && <div className="rounded-2xl bg-white/5 p-4">Loading…</div>}
-        {err && (
-          <div className="rounded-2xl bg-red-500/20 p-3 text-sm text-red-200">
-            {err}
-          </div>
-        )}
-
-        {!loading && feed.length === 0 && (
-          <div className="rounded-2xl bg-white/5 p-4 text-sm text-white/70">
-            No tickets yet. Use the menu to post a FREE ticket.
-          </div>
-        )}
-
-        {feed.map((t) => (
-          <TicketCard key={t.id} t={t} />
-        ))}
-      </div>
+      {!items.length && !err && (
+        <div className="rounded-2xl bg-white/5 p-4 text-sm text-white/70">
+          No tickets yet. Ask tipsters to post!
+        </div>
+      )}
     </main>
   );
 }

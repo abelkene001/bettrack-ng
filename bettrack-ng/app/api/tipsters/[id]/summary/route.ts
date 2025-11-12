@@ -29,19 +29,19 @@ type TipsterProfile = {
   is_verified: boolean;
 };
 
-type DBTicketRow = {
-  id: string;
-  type: "free" | "premium";
-  title: string | null;
-  description: string | null;
-  total_odds: number | string | null;
-  bookmaker: Bookmaker | null;
-  confidence_level: number | string | null;
-  match_details: unknown;
-  booking_code: string | null;
-  status: "pending" | "won" | "lost" | null;
-  posted_at: string | null;
-};
+// type DBTicketRow = {
+//   id: string;
+//   type: "free" | "premium";
+//   title: string | null;
+//   description: string | null;
+//   total_odds: number | string | null;
+//   bookmaker: Bookmaker | null;
+//   confidence_level: number | string | null;
+//   match_details: unknown;
+//   booking_code: string | null;
+//   status: "pending" | "won" | "lost" | null;
+//   posted_at: string | null;
+// };
 
 type TipTicket = {
   id: string;
@@ -85,12 +85,16 @@ function toStatus(v: unknown): "pending" | "won" | "lost" {
   return "pending";
 }
 
-// ✅ The key fix: destructure the 2nd arg as `{ params }` and type it inline.
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  const id = params.id;
+/**
+ * NOTE: We intentionally accept only the Request here and parse the id from the URL path.
+ * This avoids Next.js' strict type check on the 2nd argument shape.
+ */
+export async function GET(req: Request) {
+  // Path is: /api/tipsters/[id]/summary  -> segments ['', 'api', 'tipsters', '<id>', 'summary']
+  const { pathname } = new URL(req.url);
+  const segments = pathname.split("/").filter(Boolean); // e.g. ['api','tipsters','<id>','summary']
+  const id = segments.length >= 4 ? segments[2 + 1] /* index 3 */ : "";
+
   if (!id) return bad("MISSING_ID", 400);
 
   // 1) profile
@@ -121,7 +125,7 @@ export async function GET(
     is_verified: Boolean(p.is_verified),
   };
 
-  // 2) recent tickets
+  // 2) recent tickets by this tipster
   const { data: tRows, error: tErr } = await supabaseAdmin
     .from("tickets")
     .select(

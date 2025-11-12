@@ -57,9 +57,10 @@ function toStatus(v: unknown): "pending" | "won" | "lost" {
 export default async function TipsterPage({
   params,
 }: {
-  params: { id: string };
+  // ✅ Your project’s PageProps expects params to be a Promise
+  params: Promise<{ id: string }>;
 }) {
-  const tipsterId = params.id;
+  const { id: tipsterId } = await params;
 
   // 1) profile
   const { data: prof, error: pErr } = await supabaseAdmin
@@ -220,7 +221,7 @@ export default async function TipsterPage({
         </div>
       </div>
 
-      {/* Grid of tickets */}
+      {/* Tickets list */}
       <div className="mt-6 space-y-3">
         {tickets.length === 0 ? (
           <div className="text-sm text-white/60">No tickets yet.</div>

@@ -49,42 +49,10 @@ function getRangeStart(range: Range): string | null {
   return d.toISOString();
 }
 
-type RawTipster =
-  | {
-      display_name?: unknown;
-      profile_photo_url?: unknown;
-      is_verified?: unknown;
-    }
-  | Array<{
-      display_name?: unknown;
-      profile_photo_url?: unknown;
-      is_verified?: unknown;
-    }>;
-
-function normalizeTipster(
-  raw: RawTipster | null | undefined
-): TipsterObj | null {
-  const pick = (v?: {
-    display_name?: unknown;
-    profile_photo_url?: unknown;
-    is_verified?: unknown;
-  }): TipsterObj | null => {
-    if (!v || typeof v.display_name !== "string") return null;
-    return {
-      display_name: v.display_name,
-      profile_photo_url:
-        typeof v.profile_photo_url === "string" ? v.profile_photo_url : null,
-      is_verified:
-        typeof v.is_verified === "boolean"
-          ? v.is_verified
-          : Boolean(v.is_verified),
-    };
-  };
-  if (!raw) return null;
-  return Array.isArray(raw) ? pick(raw[0]) : pick(raw);
-}
-
-function shapeTicket(raw: Record<string, unknown>): TicketRow {
+function shapeTicket(
+  raw: Record<string, unknown>,
+  tipster: TipsterObj | null
+): TicketRow {
   const type = raw.type === "premium" ? "premium" : "free";
   const title = typeof raw.title === "string" ? raw.title : "Ticket";
   const description =
@@ -121,8 +89,6 @@ function shapeTicket(raw: Record<string, unknown>): TicketRow {
     typeof raw.posted_at === "string"
       ? raw.posted_at
       : new Date().toISOString();
-
-  const tipster = normalizeTipster(raw.tipster as RawTipster | undefined);
 
   return {
     id: String(raw.id ?? ""),
@@ -177,29 +143,41 @@ export async function GET(req: Request) {
 
   /* -------- TIPSTER MODE: tickets I posted -------- */
   if (mode === "tipster") {
-    let q = supabaseAdmin
+    let tq = supabaseAdmin
       .from("tickets")
       .select(
-        `
-        id, type, title, description, total_odds, bookmaker, confidence_level,
-        match_details, booking_code, status, posted_at,
-        tipster:tipster_id (
-          display_name, profile_photo_url, is_verified
-        )
-      `
+        "id, type, title, description, total_odds, bookmaker, confidence_level, match_details, booking_code, status, posted_at, tipster_id"
       )
       .eq("tipster_id", userRow.id)
       .order("posted_at", { ascending: false })
       .limit(150);
 
-    if (status !== "all") q = q.eq("status", status);
-    if (since) q = q.gte("posted_at", since);
+    if (status !== "all") tq = tq.eq("status", status);
+    if (since) tq = tq.gte("posted_at", since);
 
-    const { data, error } = await q;
-    if (error) return bad(error.message, 500);
+    const { data: tRows, error: tErr } = await tq;
+    if (tErr) return bad(tErr.message, 500);
 
-    const items: TicketRow[] = (data ?? []).map((r: unknown) =>
-      shapeTicket(r as Record<string, unknown>)
+    // fetch the single tipster profile for this user
+    const { data: pRow, error: pErr } = await supabaseAdmin
+      .from("tipster_profiles")
+      .select("display_name, profile_photo_url, is_verified")
+      .eq("user_id", userRow.id)
+      .maybeSingle();
+    if (pErr) return bad(pErr.message, 500);
+
+    const tipster: TipsterObj | null = pRow
+      ? {
+          display_name: String(pRow.display_name ?? "Tipster"),
+          profile_photo_url: pRow.profile_photo_url
+            ? String(pRow.profile_photo_url)
+            : null,
+          is_verified: Boolean(pRow.is_verified),
+        }
+      : null;
+
+    const items: TicketRow[] = (tRows ?? []).map((r: unknown) =>
+      shapeTicket(r as Record<string, unknown>, tipster)
     );
 
     return NextResponse.json({ ok: true, items });
@@ -235,13 +213,7 @@ export async function GET(req: Request) {
   let tq = supabaseAdmin
     .from("tickets")
     .select(
-      `
-      id, type, title, description, total_odds, bookmaker, confidence_level,
-      match_details, booking_code, status, posted_at,
-      tipster:tipster_id (
-        display_name, profile_photo_url, is_verified
-      )
-    `
+      "id, type, title, description, total_odds, bookmaker, confidence_level, match_details, booking_code, status, posted_at, tipster_id"
     )
     .in("id", ticketIds)
     .order("posted_at", { ascending: false })
@@ -252,10 +224,42 @@ export async function GET(req: Request) {
   const { data: tRows, error: tErr } = await tq;
   if (tErr) return bad(tErr.message, 500);
 
-  // Shape rows
-  const items: TicketRow[] = (tRows ?? []).map((r: unknown) =>
-    shapeTicket(r as Record<string, unknown>)
+  // fetch profiles for all tipster_ids in one go
+  const tipsterIds = Array.from(
+    new Set(
+      (tRows ?? [])
+        .map((r: unknown) => {
+          const rec = r as { tipster_id?: unknown };
+          return typeof rec.tipster_id === "string" ? rec.tipster_id : null;
+        })
+        .filter((v: string | null): v is string => typeof v === "string")
+    )
   );
+
+  const profilesByUserId = new Map<string, TipsterObj>();
+  if (tipsterIds.length) {
+    const { data: profs, error: profErr } = await supabaseAdmin
+      .from("tipster_profiles")
+      .select("user_id, display_name, profile_photo_url, is_verified")
+      .in("user_id", tipsterIds);
+    if (profErr) return bad(profErr.message, 500);
+    for (const row of profs ?? []) {
+      profilesByUserId.set(String(row.user_id), {
+        display_name: String(row.display_name ?? "Tipster"),
+        profile_photo_url: row.profile_photo_url
+          ? String(row.profile_photo_url)
+          : null,
+        is_verified: Boolean(row.is_verified),
+      });
+    }
+  }
+
+  const items: TicketRow[] = (tRows ?? []).map((r: unknown) => {
+    const rec = r as Record<string, unknown>;
+    const tOwner = String(rec.tipster_id ?? "");
+    const tipster = profilesByUserId.get(tOwner) ?? null;
+    return shapeTicket(rec, tipster);
+  });
 
   // Optional: sort by purchase time instead of posted time
   const purchaseOrder = new Map<string, number>();

@@ -85,8 +85,12 @@ function toStatus(v: unknown): "pending" | "won" | "lost" {
   return "pending";
 }
 
-export async function GET(_req: Request, ctx: { params: { id: string } }) {
-  const id = ctx?.params?.id;
+// ✅ The key fix: destructure the 2nd arg as `{ params }` and type it inline.
+export async function GET(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
+  const id = params.id;
   if (!id) return bad("MISSING_ID", 400);
 
   // 1) profile

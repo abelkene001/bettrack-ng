@@ -2,319 +2,287 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import AppShell from "../../../components/AppShell";
 
 type Bookmaker = "bet9ja" | "sportybet" | "1xbet" | "betking" | "other";
 type TicketType = "free" | "premium";
-type MatchRow = {
-  home: string;
-  away: string;
-  pick: string;
-  odds: number | string;
-};
-
-const BOOKMAKERS: { label: string; value: Bookmaker }[] = [
-  { label: "Bet9ja", value: "bet9ja" },
-  { label: "SportyBet", value: "sportybet" },
-  { label: "1xBet", value: "1xbet" },
-  { label: "BetKing", value: "betking" },
-  { label: "Other", value: "other" },
-];
 
 export default function NewTicketPage() {
-  const router = useRouter();
-
   const [type, setType] = useState<TicketType>("free");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [totalOdds, setTotalOdds] = useState("");
   const [bookmaker, setBookmaker] = useState<Bookmaker>("bet9ja");
-  const [confidence, setConfidence] = useState<number>(7);
-  const [totalOdds, setTotalOdds] = useState<string>("2.00");
-  const [matches, setMatches] = useState<MatchRow[]>([
-    { home: "", away: "", pick: "", odds: "" },
-  ]);
+  const [confidence, setConfidence] = useState("");
+  const [price, setPrice] = useState(""); // in naira (we convert to kobo)
+  const [matchDetails, setMatchDetails] = useState("");
+  const [bookingCode, setBookingCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const [priceNaira, setPriceNaira] = useState<string>("500"); // for premium
-  const [bookingCode, setBookingCode] = useState<string>(""); // for premium
+  const isPremium = type === "premium";
 
-  const [posting, setPosting] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const canSubmit =
+    title.trim().length > 2 &&
+    description.trim().length > 2 &&
+    totalOdds.trim() !== "" &&
+    !Number.isNaN(Number(totalOdds)) &&
+    confidence.trim() !== "" &&
+    !Number.isNaN(Number(confidence)) &&
+    bookmaker &&
+    matchDetails.trim().length > 2 &&
+    bookingCode.trim().length > 0 &&
+    (!isPremium || (price.trim() !== "" && !Number.isNaN(Number(price))));
 
-  const canSubmit = (): boolean => {
-    if (!title || title.trim().length < 3) return false;
-    if (!bookmaker) return false;
-    if (!confidence || confidence < 1 || confidence > 10) return false;
-    const to = Number(totalOdds);
-    if (!Number.isFinite(to) || to <= 1) return false;
-    if (!matches.length) return false;
-    for (const m of matches) {
-      const o = Number(m.odds);
-      if (!m.home || !m.away || !m.pick || !Number.isFinite(o) || o <= 1)
-        return false;
-    }
-    if (type === "premium") {
-      const kobo = Math.round(Number(priceNaira) * 100);
-      if (!Number.isFinite(kobo) || kobo <= 0) return false;
-      if (!bookingCode.trim()) return false;
-    }
-    return true;
-  };
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit || submitting) return;
+    setSubmitting(true);
+    setMsg(null);
 
-  const addMatch = () =>
-    setMatches((prev) => [...prev, { home: "", away: "", pick: "", odds: "" }]);
-
-  const updateMatch = (idx: number, patch: Partial<MatchRow>) =>
-    setMatches((prev) =>
-      prev.map((m, i) => (i === idx ? { ...m, ...patch } : m))
-    );
-
-  const removeMatch = (idx: number) =>
-    setMatches((prev) => prev.filter((_, i) => i !== idx));
-
-  const submit = async () => {
-    setErr(null);
-    if (!canSubmit()) {
-      setErr("Please fill all fields correctly.");
-      return;
-    }
-    setPosting(true);
     try {
       const payload = {
         type,
-        title: title.trim(),
-        description: description.trim() || null,
-        bookmaker,
-        confidence_level: confidence,
+        title,
+        description,
         total_odds: Number(totalOdds),
-        match_details: matches.map((m) => ({
-          home: m.home.trim(),
-          away: m.away.trim(),
-          pick: m.pick.trim(),
-          odds: Number(m.odds),
-        })),
-        ...(type === "premium"
-          ? {
-              price: Math.round(Number(priceNaira) * 100), // kobo
-              booking_code: bookingCode.trim(),
-            }
-          : {}),
+        bookmaker,
+        confidence_level: Number(confidence),
+        price: isPremium ? Math.round(Number(price) * 100) : null, // kobo
+        match_details: safeJsonParse(matchDetails),
+        booking_code: bookingCode.trim(),
       };
+
+      if (
+        !Array.isArray(payload.match_details) ||
+        payload.match_details.length === 0
+      ) {
+        setMsg(
+          'Match details must be a JSON array like: [{"match":"Arsenal vs Chelsea","pick":"Home Win"}]'
+        );
+        setSubmitting(false);
+        return;
+      }
+
       const res = await fetch("/api/tickets/create", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const ctype = res.headers.get("content-type") || "";
-      if (!ctype.includes("application/json")) {
-        setErr(`Server error (${res.status})`);
-        setPosting(false);
-        return;
+
+      const json: { ok?: boolean; message?: string } = await res.json();
+      if (!res.ok || !json?.ok) {
+        setMsg(json?.message ?? "Failed to create ticket");
+      } else {
+        setMsg("Ticket created successfully!");
+        setTitle("");
+        setDescription("");
+        setTotalOdds("");
+        setConfidence("");
+        setPrice("");
+        setMatchDetails("");
+        setBookingCode("");
       }
-      const json = await res.json();
-      if (!json.ok) {
-        setErr(json.error || "Failed to post");
-        setPosting(false);
-        return;
-      }
-      // go to tickets dashboard
-      router.push("/tickets");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to create ticket";
+      setMsg(message);
     } finally {
-      setPosting(false);
+      setSubmitting(false);
     }
-  };
+  }
 
   return (
-    <main className="flex flex-col gap-4 p-4 pb-20">
-      <header className="rounded-2xl bg-white/5 p-4 shadow-sm">
-        <div className="text-sm font-semibold">Post a Ticket</div>
-      </header>
-
-      {err && (
-        <div className="rounded-2xl bg-red-500/20 p-3 text-sm text-red-200">
-          {err}
-        </div>
-      )}
-
-      <section className="space-y-3">
+    <AppShell title="Post Ticket" showPostButton={false}>
+      <form onSubmit={onSubmit} className="space-y-4 pb-24">
         {/* type */}
-        <div className="rounded-2xl bg-white/5 p-4">
-          <div className="mb-2 text-sm font-semibold">Type</div>
-          <div className="flex gap-2">
+        <div>
+          <label className="text-sm text-white/70">Type</label>
+          <div className="mt-1 grid grid-cols-2 gap-2">
             <button
+              type="button"
               onClick={() => setType("free")}
-              className={`rounded-xl px-3 py-2 text-xs ${
+              className={`rounded-xl px-3 py-2 border ${
                 type === "free"
-                  ? "bg-white text-[#0b0f10] font-semibold"
-                  : "bg-white/10 text-white"
+                  ? "border-fuchsia-400 bg-fuchsia-500/10"
+                  : "border-white/10 bg-white/5"
               }`}
             >
-              FREE
+              Free
             </button>
             <button
+              type="button"
               onClick={() => setType("premium")}
-              className={`rounded-xl px-3 py-2 text-xs ${
+              className={`rounded-xl px-3 py-2 border ${
                 type === "premium"
-                  ? "bg-white text-[#0b0f10] font-semibold"
-                  : "bg-white/10 text-white"
+                  ? "border-fuchsia-400 bg-fuchsia-500/10"
+                  : "border-white/10 bg-white/5"
               }`}
             >
-              PREMIUM
+              Premium
             </button>
           </div>
         </div>
 
-        {/* main fields */}
-        <div className="rounded-2xl bg-white/5 p-4 space-y-3">
-          <div>
-            <div className="mb-1 text-sm">Title</div>
-            <input
-              className="w-full rounded-xl bg-white/10 px-3 py-2 text-sm outline-none"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., 5-game ACCA | 25.40 odds"
-            />
-          </div>
+        <Input
+          label="Title"
+          value={title}
+          onValueChange={(v) => setTitle(v)}
+          placeholder="e.g. 5-game accumulator"
+        />
+        <TextArea
+          label="Description"
+          value={description}
+          onValueChange={(v) => setDescription(v)}
+          placeholder="Short summary…"
+        />
 
-          <div>
-            <div className="mb-1 text-sm">Description (optional)</div>
-            <textarea
-              className="w-full rounded-xl bg-white/10 px-3 py-2 text-sm outline-none"
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="League focus, risk level, etc."
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <div className="mb-1 text-sm">Bookmaker</div>
-              <select
-                className="w-full rounded-xl bg-white/10 px-3 py-2 text-sm outline-none"
-                value={bookmaker}
-                onChange={(e) => setBookmaker(e.target.value as Bookmaker)}
-              >
-                {BOOKMAKERS.map((b) => (
-                  <option key={b.value} value={b.value}>
-                    {b.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <div className="mb-1 text-sm">Confidence (1–10)</div>
-              <input
-                type="number"
-                min={1}
-                max={10}
-                className="w-full rounded-xl bg-white/10 px-3 py-2 text-sm outline-none"
-                value={confidence}
-                onChange={(e) => setConfidence(Number(e.target.value))}
-              />
-            </div>
-            <div>
-              <div className="mb-1 text-sm">Total Odds</div>
-              <input
-                className="w-full rounded-xl bg-white/10 px-3 py-2 text-sm outline-none"
-                value={totalOdds}
-                onChange={(e) => setTotalOdds(e.target.value)}
-                placeholder="e.g., 2.30"
-              />
-            </div>
-          </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Total Odds"
+            value={totalOdds}
+            onValueChange={(v) => setTotalOdds(v)}
+            placeholder="e.g. 25.4"
+            type="number"
+            min="1"
+            step="0.01"
+          />
+          <Input
+            label="Confidence (1-10)"
+            value={confidence}
+            onValueChange={(v) => setConfidence(v)}
+            placeholder="e.g. 8"
+            type="number"
+            min="1"
+            max="10"
+          />
         </div>
 
-        {/* matches */}
-        <div className="rounded-2xl bg-white/5 p-4 space-y-3">
-          <div className="mb-2 text-sm font-semibold">Matches</div>
-          {matches.map((m, i) => (
-            <div key={i} className="grid grid-cols-4 gap-2">
-              <input
-                className="rounded-xl bg-white/10 px-2 py-2 text-xs outline-none"
-                placeholder="Home"
-                value={m.home}
-                onChange={(e) => updateMatch(i, { home: e.target.value })}
-              />
-              <input
-                className="rounded-xl bg-white/10 px-2 py-2 text-xs outline-none"
-                placeholder="Away"
-                value={m.away}
-                onChange={(e) => updateMatch(i, { away: e.target.value })}
-              />
-              <input
-                className="rounded-xl bg-white/10 px-2 py-2 text-xs outline-none"
-                placeholder="Pick"
-                value={m.pick}
-                onChange={(e) => updateMatch(i, { pick: e.target.value })}
-              />
-              <input
-                className="rounded-xl bg-white/10 px-2 py-2 text-xs outline-none"
-                placeholder="Odds"
-                value={m.odds}
-                onChange={(e) => updateMatch(i, { odds: e.target.value })}
-              />
-              {matches.length > 1 && (
-                <button
-                  onClick={() => removeMatch(i)}
-                  className="col-span-4 rounded-xl bg-red-500/20 px-3 py-1 text-xs"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          ))}
-          <button
-            onClick={addMatch}
-            className="rounded-xl bg-white/10 px-3 py-2 text-xs"
+        <div>
+          <label className="text-sm text-white/70">Bookmaker</label>
+          <select
+            className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2"
+            value={bookmaker}
+            onChange={(e) => setBookmaker(e.target.value as Bookmaker)}
           >
-            + Add Match
-          </button>
+            <option value="bet9ja">Bet9ja</option>
+            <option value="sportybet">SportyBet</option>
+            <option value="1xbet">1xBet</option>
+            <option value="betking">BetKing</option>
+            <option value="other">Other</option>
+          </select>
         </div>
 
-        {/* Premium fields */}
-        {type === "premium" && (
-          <div className="rounded-2xl bg-white/5 p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="mb-1 text-sm">Price (₦)</div>
-                <input
-                  className="w-full rounded-xl bg-white/10 px-3 py-2 text-sm outline-none"
-                  value={priceNaira}
-                  onChange={(e) => setPriceNaira(e.target.value)}
-                  placeholder="e.g., 500"
-                />
-              </div>
-              <div>
-                <div className="mb-1 text-sm">Booking Code</div>
-                <input
-                  className="w-full rounded-xl bg-white/10 px-3 py-2 text-sm outline-none"
-                  value={bookingCode}
-                  onChange={(e) => setBookingCode(e.target.value)}
-                  placeholder="e.g., XK2J9"
-                />
-              </div>
-            </div>
-            <div className="text-[11px] text-white/70">
-              Premium tickets stay locked until a buyer pays. After purchase,
-              the buyer sees matches and booking code.
-            </div>
-          </div>
+        {isPremium && (
+          <Input
+            label="Price (₦)"
+            value={price}
+            onValueChange={(v) => setPrice(v)}
+            placeholder="e.g. 500"
+            type="number"
+            min="50"
+            step="10"
+          />
         )}
 
+        <TextArea
+          label="Match Details (JSON array)"
+          value={matchDetails}
+          onValueChange={(v) => setMatchDetails(v)}
+          placeholder='[{"match":"Arsenal vs Chelsea","pick":"Home Win"},{"match":"Man City vs Spurs","pick":"Over 2.5"}]'
+          rows={5}
+        />
+
+        <Input
+          label="Booking Code"
+          value={bookingCode}
+          onValueChange={(v) => setBookingCode(v)}
+          placeholder="e.g. 6ABCD1"
+        />
+
+        {msg && <div className="text-sm text-red-300">{msg}</div>}
+
         <button
-          onClick={submit}
-          disabled={posting || !canSubmit()}
-          className={`w-full rounded-2xl px-4 py-3 text-sm font-semibold ${
-            posting || !canSubmit()
-              ? "bg-white/20 text-white/60"
-              : "bg-white text-[#0b0f10]"
+          type="submit"
+          disabled={!canSubmit || submitting}
+          className={`w-full rounded-xl px-4 py-3 font-semibold ${
+            !canSubmit || submitting
+              ? "bg-white/10 text-white/40 cursor-not-allowed"
+              : "bg-fuchsia-600 hover:bg-fuchsia-500"
           }`}
         >
-          {posting ? "Posting..." : "Post Ticket"}
+          {submitting ? "Posting…" : "Post Ticket"}
         </button>
-      </section>
-    </main>
+      </form>
+    </AppShell>
   );
+}
+
+function Input({
+  label,
+  value,
+  onValueChange,
+  placeholder,
+  type = "text",
+  ...rest
+}: {
+  label: string;
+  value: string;
+  onValueChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange" | "value">) {
+  return (
+    <div>
+      <label className="text-sm text-white/70">{label}</label>
+      <input
+        {...rest}
+        type={type}
+        value={value}
+        onChange={(e) => onValueChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2"
+      />
+    </div>
+  );
+}
+
+function TextArea({
+  label,
+  value,
+  onValueChange,
+  placeholder,
+  rows = 3,
+  ...rest
+}: {
+  label: string;
+  value: string;
+  onValueChange: (v: string) => void;
+  placeholder?: string;
+  rows?: number;
+} & Omit<
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+  "onChange" | "value"
+>) {
+  return (
+    <div>
+      <label className="text-sm text-white/70">{label}</label>
+      <textarea
+        {...rest}
+        rows={rows}
+        value={value}
+        onChange={(e) => onValueChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2"
+      />
+    </div>
+  );
+}
+
+function safeJsonParse(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }

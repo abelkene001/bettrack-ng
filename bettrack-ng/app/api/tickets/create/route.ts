@@ -156,8 +156,10 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (error) return bad(error.message, 500);
 
-  // best-effort RPC (safe no-op if not present)
-  await supabaseAdmin.rpc("noop").catch(() => {});
+  // Optional: fire-and-forget RPC (if you created it). It's NOT Promise.catch-able.
+  // Safe pattern: await and ignore the returned error.
+  const { error: _noopErr } = await supabaseAdmin.rpc("noop");
+  void _noopErr; // ignore
 
   return NextResponse.json({ ok: true, id: data?.id ?? null });
 }

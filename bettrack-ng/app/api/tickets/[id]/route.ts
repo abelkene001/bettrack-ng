@@ -1,127 +1,134 @@
 // app/api/tickets/[id]/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+import { NextResponse } from "next/server";
+import { supabaseAdmin } from "../../../../lib/supabaseAdmin";
 
 type Bookmaker = "bet9ja" | "sportybet" | "1xbet" | "betking" | "other";
 type Status = "pending" | "won" | "lost";
 type TicketType = "free" | "premium";
 
-type DBTicketRow = {
+type TicketRow = {
   id: string;
-  tipster_id: string; // users.id (uuid)
+  tipster_id: string;
   type: TicketType;
   title: string;
-  description: string;
-  price: number | null; // kobo for premium
-  total_odds: number;
-  bookmaker: Bookmaker;
+  description: string | null;
+  total_odds: number | null;
+  bookmaker: Bookmaker | null;
   confidence_level: number;
-  match_details: unknown; // jsonb
   booking_code: string | null;
+  match_details: unknown | null; // kept opaque here; details are revealed only if unlocked on the ticket page
+  price: number | null; // kobo for premium
+  posted_at: string; // ISO
   status: Status;
-  posted_at: string;
   settled_at: string | null;
-  times_purchased: number;
-  is_active: boolean;
 };
 
 type TipsterProfileRow = {
   user_id: string;
-  display_name: string;
-  bio: string | null;
+  display_name: string | null;
   profile_photo_url: string | null;
-  average_rating: number | null;
-  total_followers: number;
-  is_verified: boolean;
+  is_verified: boolean | null;
 };
 
-function getAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
+type ResponseBody =
+  | {
+      ok: true;
+      ticket: {
+        id: string;
+        type: TicketType;
+        status: Status;
+        postedAt: string;
+        title: string;
+        description: string | null;
+        odds: number | null;
+        bookmaker: Bookmaker | null;
+        confidence: number;
+        // Privacy: premium stays locked on feed; details shown on /t/[id] when purchased
+        bookingCode: string | null; // will be null for premium here
+        priceNGN: number | null; // for premium
+        tipster: {
+          id: string;
+          name: string;
+          photo: string | null;
+          verified: boolean;
+        };
+      };
+    }
+  | { ok: false; error: string };
+
+function bad(error: string, status = 400) {
+  return NextResponse.json({ ok: false, error } satisfies ResponseBody, {
+    status,
+  });
 }
 
-export async function GET(_req: NextRequest, ctx: { params: { id: string } }) {
-  const id = String(ctx.params?.id ?? "");
-  if (!id) {
-    return NextResponse.json(
-      { ok: false, message: "Missing id" },
-      { status: 400 }
-    );
-  }
+// ✅ Correct signature: destructure the second arg as { params }
+export async function GET(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
+  const id = params.id?.trim();
+  if (!id) return bad("Missing ticket id", 400);
 
-  const supabase = getAdmin();
-
-  // 1) Fetch ticket
-  const { data: ticket, error: tErr } = await supabase
-    .from<DBTicketRow>("tickets")
-    .select("*")
+  // 1) Load ticket by id
+  const { data: t, error: tErr } = await supabaseAdmin
+    .from("tickets")
+    .select(
+      "id, tipster_id, type, title, description, total_odds, bookmaker, confidence_level, booking_code, match_details, price, posted_at, status, settled_at"
+    )
     .eq("id", id)
     .maybeSingle();
 
-  if (tErr) {
-    return NextResponse.json(
-      { ok: false, message: tErr.message },
-      { status: 500 }
-    );
-  }
-  if (!ticket || !ticket.is_active) {
-    return NextResponse.json(
-      { ok: false, message: "Not found" },
-      { status: 404 }
-    );
-  }
+  if (tErr) return bad(tErr.message, 500);
+  if (!t) return bad("Ticket not found", 404);
 
-  // 2) Fetch tipster profile (by user_id)
-  const { data: profile, error: pErr } = await supabase
-    .from<TipsterProfileRow>("tipster_profiles")
-    .select(
-      "user_id, display_name, bio, profile_photo_url, average_rating, total_followers, is_verified"
-    )
+  const ticket = t as TicketRow;
+
+  // 2) Fetch tipster profile
+  const { data: prof, error: pErr } = await supabaseAdmin
+    .from("tipster_profiles")
+    .select("user_id, display_name, profile_photo_url, is_verified")
     .eq("user_id", ticket.tipster_id)
     .maybeSingle();
 
-  if (pErr) {
-    return NextResponse.json(
-      { ok: false, message: pErr.message },
-      { status: 500 }
-    );
-  }
+  if (pErr) return bad(pErr.message, 500);
 
-  // Premium masking (until we implement purchase check)
-  const isPremium = ticket.type === "premium";
-  const maskedMatchDetails = isPremium ? [] : ticket.match_details ?? [];
-  const maskedBooking = isPremium ? null : ticket.booking_code;
+  const profile = (prof ?? {
+    user_id: ticket.tipster_id,
+    display_name: "Tipster",
+    profile_photo_url: null,
+    is_verified: false,
+  }) as TipsterProfileRow;
 
-  return NextResponse.json({
+  // 3) Shape response: keep premium data locked here (booking code hidden)
+  const body: ResponseBody = {
     ok: true,
     ticket: {
       id: ticket.id,
-      tipster_id: ticket.tipster_id,
       type: ticket.type,
+      status: ticket.status,
+      postedAt: ticket.posted_at,
       title: ticket.title,
       description: ticket.description,
-      price: ticket.price, // still in kobo
-      total_odds: ticket.total_odds,
+      odds: typeof ticket.total_odds === "number" ? ticket.total_odds : null,
       bookmaker: ticket.bookmaker,
-      confidence_level: ticket.confidence_level,
-      match_details: maskedMatchDetails,
-      booking_code: maskedBooking,
-      status: ticket.status,
-      posted_at: ticket.posted_at,
-      settled_at: ticket.settled_at,
-      times_purchased: ticket.times_purchased,
+      confidence: ticket.confidence_level,
+      bookingCode: ticket.type === "free" ? ticket.booking_code : null,
+      priceNGN:
+        ticket.type === "premium" && typeof ticket.price === "number"
+          ? Math.round(ticket.price / 100)
+          : null,
+      tipster: {
+        id: profile.user_id,
+        name: profile.display_name ?? "Tipster",
+        photo: profile.profile_photo_url,
+        verified: Boolean(profile.is_verified),
+      },
     },
-    tipster: profile
-      ? {
-          user_id: profile.user_id,
-          display_name: profile.display_name,
-          bio: profile.bio ?? "",
-          profile_photo_url: profile.profile_photo_url,
-          average_rating: profile.average_rating ?? 0,
-          total_followers: profile.total_followers,
-          is_verified: profile.is_verified,
-        }
-      : null,
-  });
+  };
+
+  return NextResponse.json(body);
 }

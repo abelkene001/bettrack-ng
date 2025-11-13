@@ -19,7 +19,7 @@ type TicketRow = {
   bookmaker: Bookmaker | null;
   confidence_level: number;
   booking_code: string | null;
-  match_details: unknown | null; // kept opaque here; details are revealed only if unlocked on the ticket page
+  match_details: unknown | null;
   price: number | null; // kobo for premium
   posted_at: string; // ISO
   status: Status;
@@ -33,47 +33,47 @@ type TipsterProfileRow = {
   is_verified: boolean | null;
 };
 
-type ResponseBody =
-  | {
-      ok: true;
-      ticket: {
-        id: string;
-        type: TicketType;
-        status: Status;
-        postedAt: string;
-        title: string;
-        description: string | null;
-        odds: number | null;
-        bookmaker: Bookmaker | null;
-        confidence: number;
-        // Privacy: premium stays locked on feed; details shown on /t/[id] when purchased
-        bookingCode: string | null; // will be null for premium here
-        priceNGN: number | null; // for premium
-        tipster: {
-          id: string;
-          name: string;
-          photo: string | null;
-          verified: boolean;
-        };
-      };
-    }
-  | { ok: false; error: string };
+type OkBody = {
+  ok: true;
+  ticket: {
+    id: string;
+    type: TicketType;
+    status: Status;
+    postedAt: string;
+    title: string;
+    description: string | null;
+    odds: number | null;
+    bookmaker: Bookmaker | null;
+    confidence: number;
+    bookingCode: string | null; // hidden for premium here
+    priceNGN: number | null; // for premium
+    tipster: {
+      id: string;
+      name: string;
+      photo: string | null;
+      verified: boolean;
+    };
+  };
+};
+
+type ErrBody = { ok: false; error: string };
 
 function bad(error: string, status = 400) {
-  return NextResponse.json({ ok: false, error } satisfies ResponseBody, {
-    status,
-  });
+  return NextResponse.json({ ok: false, error } as ErrBody, { status });
 }
 
-// ✅ Correct signature: destructure the second arg as { params }
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  const id = params.id?.trim();
+/**
+ * ✅ Use a single-argument handler (Request) to avoid Next's analyzer rejecting the 2nd arg type.
+ * We parse the id from the URL pathname instead of using `{ params }`.
+ */
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const segments = url.pathname.split("/").filter(Boolean);
+  // Expecting: ["api", "tickets", "{id}"]
+  const id = segments.length >= 3 ? segments[2] : "";
   if (!id) return bad("Missing ticket id", 400);
 
-  // 1) Load ticket by id
+  // 1) Load ticket
   const { data: t, error: tErr } = await supabaseAdmin
     .from("tickets")
     .select(
@@ -87,7 +87,7 @@ export async function GET(
 
   const ticket = t as TicketRow;
 
-  // 2) Fetch tipster profile
+  // 2) Tipster profile
   const { data: prof, error: pErr } = await supabaseAdmin
     .from("tipster_profiles")
     .select("user_id, display_name, profile_photo_url, is_verified")
@@ -103,8 +103,8 @@ export async function GET(
     is_verified: false,
   }) as TipsterProfileRow;
 
-  // 3) Shape response: keep premium data locked here (booking code hidden)
-  const body: ResponseBody = {
+  // 3) Shape response (keep premium code locked at API level)
+  const body: OkBody = {
     ok: true,
     ticket: {
       id: ticket.id,

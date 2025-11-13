@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import ProfileHeader from "../../components/ProfileHeader";
-import TicketCard from "../../components/TicketCard";
+import TicketCard from "../../components/FeedCard";
 import { useRouter } from "next/navigation";
 
 type Role = "tipster" | "bettor" | "both";

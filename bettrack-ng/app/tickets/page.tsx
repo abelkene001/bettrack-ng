@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import TopTabs from "../../components/TopTabs";
-import TicketCard from "../../components/TicketCard";
+import TicketCard from "../../components/FeedCard";
 import { useRouter } from "next/navigation";
 
 type Role = "tipster" | "bettor" | "both";

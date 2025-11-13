@@ -5,7 +5,7 @@ import TicketCard, {
   TicketCardModel,
   TipsterBrief,
   Bookmaker,
-} from "../../../components/TicketCard";
+} from "../../../components/FeedCard";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 
 type DBProfile = {

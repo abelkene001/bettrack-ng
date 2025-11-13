@@ -40,3 +40,39 @@ export function validateTelegramInitData(
 
   return { ok: true as const, user };
 }
+
+// lib/telegram.ts
+// Minimal, strict types for Telegram WebApp haptics + safe helpers.
+
+export type HapticImpactStyle = "light" | "medium" | "heavy";
+export type HapticNotificationType = "success" | "warning" | "error";
+
+export interface TelegramHaptics {
+  impactOccurred?: (style: HapticImpactStyle) => void;
+  notificationOccurred?: (type: HapticNotificationType) => void;
+}
+
+export interface TelegramWebApp {
+  HapticFeedback?: TelegramHaptics;
+}
+
+export interface TelegramNamespace {
+  WebApp?: TelegramWebApp;
+}
+
+// Make it available globally without `any`
+declare global {
+  interface Window {
+    Telegram?: TelegramNamespace;
+  }
+}
+
+/** Safe haptic impact (no-ops if not available) */
+export function hapticImpact(style: HapticImpactStyle = "light"): void {
+  window?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(style);
+}
+
+/** Safe haptic notify (no-ops if not available) */
+export function hapticNotify(type: HapticNotificationType = "success"): void {
+  window?.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.(type);
+}

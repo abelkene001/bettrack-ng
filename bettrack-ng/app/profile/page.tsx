@@ -209,7 +209,7 @@ export default function MyProfilePage() {
             {posts.map((t) => (
               <TicketCard
                 key={t.id}
-                t={t}
+                item={t}
                 onClick={() => router.push(`/t/${t.id}`)}
               />
             ))}

@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 type Bookmaker = "bet9ja" | "sportybet" | "1xbet" | "betking" | "other";
@@ -58,17 +58,19 @@ function formatPriceNGN(n: number): string {
   }).format(n);
 }
 
-export default function TicketPage({ params }: { params: { id: string } }) {
+export default function TicketPage() {
   const router = useRouter();
+  const params = useParams<{ id: string }>(); // ✅ read route param in client component
+  const id = params.id;
+
   const [loading, setLoading] = useState<boolean>(true);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<
     Extract<TicketResponse, { ok: true }>["ticket"] | null
   >(null);
 
-  const id = params.id;
-
   useEffect(() => {
+    if (!id) return;
     let cancelled = false;
     async function run() {
       setLoading(true);

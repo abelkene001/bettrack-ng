@@ -1,26 +1,16 @@
 // app/layout.tsx
-import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import type { ReactNode } from "react";
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "BetTrack NG",
-  description: "Telegram Mini App for betting tickets marketplace",
+  description: "Buy & sell premium tickets for Nigerian bettors.",
 };
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  themeColor: "#0b0f10",
-};
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="bg-[#0b0f10]">
-      <body>{children}</body>
+    <html lang="en">
+      <body className="bg-[#0b0f10] text-white">{children}</body>
     </html>
   );
 }

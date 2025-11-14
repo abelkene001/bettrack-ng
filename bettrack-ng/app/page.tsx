@@ -1,75 +1,64 @@
 // app/page.tsx
 "use client";
 
-import { useCallback } from "react";
-import HomeHeader from "../components/HomeHeader";
-import FeedCard, { type FeedItem } from "../components/FeedCard";
-import SkeletonCard from "../components/SkeletonCard";
-import { useInfiniteScroll } from "../hooks/useInfiniteScroll";
-import { hapticImpact } from "../lib/telegram";
+import { useEffect, useState } from "react";
+import TicketCard, { type TicketCardData } from "@/components/TicketCard";
 
-async function fetchRecent(
-  cursor: string | null
-): Promise<{ items: FeedItem[]; nextCursor: string | null }> {
-  const params = new URLSearchParams();
-  params.set("limit", "10");
-  if (cursor) params.set("cursor", cursor);
-
-  const res = await fetch(`/api/tickets/recent?${params.toString()}`, {
-    cache: "no-store",
-  });
-  const ctype = res.headers.get("content-type") || "";
-  if (!ctype.includes("application/json")) {
-    return { items: [], nextCursor: null };
-  }
-  const json = (await res.json()) as {
-    ok: boolean;
-    items?: FeedItem[];
-    nextCursor?: string | null;
-  };
-  if (!json.ok) return { items: [], nextCursor: null };
-  return { items: json.items ?? [], nextCursor: json.nextCursor ?? null };
-}
+type FeedResponse =
+  | { ok: true; items: TicketCardData[] }
+  | { ok: false; error: string };
 
 export default function HomePage() {
-  const { items, loading, hasMore, sentinelRef, loadedOnce } =
-    useInfiniteScroll<FeedItem>({
-      fetchPage: fetchRecent,
-    });
+  const [items, setItems] = useState<TicketCardData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
-  const openDrawer = useCallback(() => {
-    // (future) open real drawer
-    hapticImpact("light");
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      setLoading(true);
+      setErr(null);
+      try {
+        const res = await fetch("/api/tickets/recent", { cache: "no-store" });
+        const json = (await res.json()) as FeedResponse;
+        if (!json.ok) throw new Error(json.error);
+        if (!cancelled) setItems(json.items);
+      } catch (e) {
+        if (!cancelled) setErr((e as Error).message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
-    <main className="min-h-screen bg-[#0b0f10] text-white">
-      <HomeHeader onOpenDrawer={openDrawer} />
+    <main className="mx-auto min-h-screen max-w-md bg-[#0b0f10] px-4 py-4">
+      <header className="mb-3 flex items-center justify-between">
+        <div className="text-sm font-semibold">Home</div>
+        {/* Put your SVG bell icon here if you want */}
+      </header>
 
-      <div className="mx-auto max-w-md space-y-4 p-4 pb-24">
-        {/* First load skeletons */}
-        {!loadedOnce && (
-          <>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </>
-        )}
+      {loading && (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-40 animate-pulse rounded-3xl bg-white/10" />
+          ))}
+        </div>
+      )}
 
-        {items.map((it) => (
-          <FeedCard key={it.id} item={it} />
-        ))}
+      {!loading && err && <div className="rounded-xl bg-red-500/15 p-3 text-red-200">{err}</div>}
 
-        {/* Sentinel for infinite scroll */}
-        {hasMore && <div ref={sentinelRef} className="h-10 w-full" />}
-
-        {/* Empty state */}
-        {loadedOnce && items.length === 0 && !loading && (
-          <div className="rounded-2xl bg-white/5 p-4 text-center text-sm text-white/70">
-            No tickets yet. Try again later or browse tipsters.
-          </div>
-        )}
-      </div>
+      {!loading && !err && (
+        <div className="space-y-4">
+          {items.map((item) => (
+            <TicketCard key={item.id} item={item} />
+          ))}
+        </div>
+      )}
     </main>
   );
 }

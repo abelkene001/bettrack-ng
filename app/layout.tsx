@@ -8,7 +8,12 @@ export const metadata: Metadata = {
   title: "BetTrack NG - Premium Betting Tips",
   description:
     "Buy and sell premium betting tickets from verified tipsters in Nigeria",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
   themeColor: "#0a0a0f",
 };
 
